@@ -9,7 +9,8 @@ import { env } from "./lib/env";
 import { getSessionCookieOptions } from "./lib/cookies";
 import { findUserByUnionId, upsertUser } from "./queries/users";
 
-export const identity = () => `local:${env.adminEmail.toLowerCase()}`;
+export const identity = (email = env.adminEmail) => `local:${email.toLowerCase()}`;
+export const isReviewer = (unionId: string) => Boolean(env.reviewEmail && unionId === identity(env.reviewEmail));
 const secret = () => new TextEncoder().encode(env.appSecret);
 
 export async function authenticateRequest(headers: Headers) {
@@ -17,8 +18,8 @@ export async function authenticateRequest(headers: Headers) {
   if (!token) throw Errors.forbidden("Authentication required.");
   try {
     const { payload } = await jwtVerify(token, secret(), { algorithms: ["HS256"] });
-    if (payload.sub !== identity()) throw new Error("Invalid session");
-    const user = await findUserByUnionId(identity());
+    if (payload.sub !== identity() && (!env.reviewEmail || payload.sub !== identity(env.reviewEmail))) throw new Error("Invalid session");
+    const user = await findUserByUnionId(payload.sub);
     if (!user) throw new Error("User not found");
     return user;
   } catch {
@@ -27,9 +28,10 @@ export async function authenticateRequest(headers: Headers) {
 }
 
 const attempts = new Map<string, { count: number; until: number }>();
-export async function issueSession(c: Context) {
-  await upsertUser({ unionId: identity(), email: env.adminEmail, name: env.adminEmail, role: "admin", lastSignInAt: new Date() });
-  const token = await new SignJWT({}).setProtectedHeader({ alg: "HS256" }).setSubject(identity()).setIssuedAt().setExpirationTime("12h").sign(secret());
+export async function issueSession(c: Context, account = env.adminEmail) {
+  const reviewer = isReviewer(identity(account));
+  await upsertUser({ unionId: identity(account), email: account, name: reviewer ? "Play review" : account, role: reviewer ? "user" : "admin", lastSignInAt: new Date() });
+  const token = await new SignJWT({}).setProtectedHeader({ alg: "HS256" }).setSubject(identity(account)).setIssuedAt().setExpirationTime("12h").sign(secret());
   setCookie(c, Session.cookieName, token, { ...getSessionCookieOptions(c.req.raw.headers), maxAge: Session.maxAgeMs / 1000 });
   return c.json({ success: true });
 }
@@ -47,15 +49,19 @@ export async function login(c: Context) {
   if (attempt && attempt.until > now && attempt.count >= 5) return c.json({ error: "Too many attempts. Try again later." }, 429);
   let body: { email?: unknown; password?: unknown };
   try { body = await c.req.json(); } catch { return c.json({ error: "Invalid request" }, 400); }
-  const hash = env.adminPasswordScrypt;
-  const [salt, expectedHex] = hash.split(":");
-  const expected = /^[a-f0-9]{128}$/i.test(expectedHex || "") ? Buffer.from(expectedHex, "hex") : Buffer.alloc(64);
-  const actual = scryptSync(typeof body.password === "string" ? body.password : "", salt || "invalid", 64);
-  const valid = timingSafeEqual(actual, expected) && body.email === env.adminEmail;
-  if (!valid) {
+  const matches = (hash: string) => {
+    const [salt, expectedHex] = hash.split(":");
+    const expected = /^[a-f0-9]{128}$/i.test(expectedHex || "") ? Buffer.from(expectedHex, "hex") : Buffer.alloc(64);
+    const actual = scryptSync(typeof body.password === "string" ? body.password : "", salt || "invalid", 64);
+    return timingSafeEqual(actual, expected);
+  };
+  const addressEmail = typeof body.email === "string" ? body.email.toLowerCase() : "";
+  const ownerValid = matches(env.adminPasswordScrypt) && addressEmail === env.adminEmail.toLowerCase();
+  const reviewerValid = Boolean(env.reviewEmail && matches(env.reviewPasswordScrypt) && addressEmail === env.reviewEmail);
+  if (!ownerValid && !reviewerValid) {
     attempts.set(address, { count: (attempt?.until && attempt.until > now ? attempt.count : 0) + 1, until: now + 15 * 60_000 });
     return c.json({ error: "Invalid email or password" }, 401);
   }
   attempts.delete(address);
-  return issueSession(c);
+  return issueSession(c, reviewerValid ? env.reviewEmail : env.adminEmail);
 }

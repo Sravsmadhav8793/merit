@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type { Context } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { createRemoteJWKSet, jwtVerify, SignJWT } from "jose";
@@ -15,7 +15,7 @@ import { passkeyCredentials } from "@db/schema";
 import { getDb } from "./queries/connection";
 import { env } from "./lib/env";
 import { getSessionCookieOptions } from "./lib/cookies";
-import { authenticateRequest, identity, issueSession } from "./local-auth";
+import { authenticateRequest, identity, isReviewer, issueSession } from "./local-auth";
 
 const googleKeys = createRemoteJWKSet(new URL("https://www.googleapis.com/oauth2/v3/certs"));
 const googleCookie = "private_google_nonce";
@@ -31,34 +31,37 @@ function shortCookie(c: Context) {
   return { ...getSessionCookieOptions(c.req.raw.headers), maxAge: 300 };
 }
 
-async function remember(c: Context, name: string, kind: string, challenge: string) {
+async function remember(c: Context, name: string, kind: string, challenge: string, account = env.adminEmail) {
   const token = await new SignJWT({ kind, challenge })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuer("sravantix-private-auth")
     .setAudience(env.appOrigin)
-    .setSubject(identity())
+    .setSubject(identity(account))
     .setIssuedAt()
     .setExpirationTime("5m")
     .sign(key);
   setCookie(c, name, token, shortCookie(c));
 }
 
-async function consume(c: Context, name: string, kind: string) {
+async function consume(c: Context, name: string, kind: string, account = env.adminEmail) {
   const token = getCookie(c, name);
   deleteCookie(c, name, { path: "/" });
   if (!token) throw new Error("Missing challenge");
   const { payload } = await jwtVerify(token, key, {
     algorithms: ["HS256"], issuer: "sravantix-private-auth", audience: env.appOrigin,
   });
-  if (payload.sub !== identity() || payload.kind !== kind || typeof payload.challenge !== "string") {
+  if (payload.sub !== identity(account) || payload.kind !== kind || typeof payload.challenge !== "string") {
     throw new Error("Invalid challenge");
   }
   return payload.challenge;
 }
 
-async function passkeys() {
-  return getDb().select().from(passkeyCredentials);
+async function passkeys(account?: "owner" | "reviewer") {
+  const query = getDb().select().from(passkeyCredentials);
+  return account ? query.where(eq(passkeyCredentials.account, account)) : query;
 }
+const accountRole = (unionId: string): "owner" | "reviewer" => isReviewer(unionId) ? "reviewer" : "owner";
+const accountEmail = (role: "owner" | "reviewer") => role === "owner" ? env.adminEmail : env.reviewEmail;
 
 export async function signInOptions(c: Context) {
   if (!env.googleClientId) return c.json({ googleClientId: null, googleNonce: null });
@@ -89,8 +92,8 @@ export async function googleLogin(c: Context) {
 
 export async function passkeyList(c: Context) {
   try {
-    await authenticateRequest(c.req.raw.headers);
-    const rows = await passkeys();
+    const user = await authenticateRequest(c.req.raw.headers);
+    const rows = await passkeys(accountRole(user.unionId));
     return c.json({ passkeys: rows.map(row => ({ id: row.id, createdAt: row.createdAt, lastUsedAt: row.lastUsedAt })) });
   } catch { return c.json({ error: "Sign in required" }, 401); }
 }
@@ -98,17 +101,19 @@ export async function passkeyList(c: Context) {
 export async function passkeyRegisterOptions(c: Context) {
   if (!trustedOrigin(c)) return c.json({ error: "Invalid origin" }, 403);
   try {
-    await authenticateRequest(c.req.raw.headers);
-    const rows = await passkeys();
+    const user = await authenticateRequest(c.req.raw.headers);
+    const role = accountRole(user.unionId);
+    const account = accountEmail(role);
+    const rows = await passkeys(role);
     const options = await generateRegistrationOptions({
-      rpName: "M.E.R.I.T.", rpID, userName: env.adminEmail,
-      userID: new TextEncoder().encode(identity()),
+      rpName: "M.E.R.I.T.", rpID, userName: account,
+      userID: new TextEncoder().encode(identity(account)),
       attestationType: "none",
       excludeCredentials: rows.map(row => ({ id: row.id })),
       authenticatorSelection: { residentKey: "required", userVerification: "required" },
       supportedAlgorithmIDs: [-7, -257],
     });
-    await remember(c, passkeyCookie, "register", options.challenge);
+    await remember(c, passkeyCookie, "register", options.challenge, account);
     return c.json(options);
   } catch { return c.json({ error: "Sign in required" }, 401); }
 }
@@ -116,8 +121,9 @@ export async function passkeyRegisterOptions(c: Context) {
 export async function passkeyRegisterVerify(c: Context) {
   if (!trustedOrigin(c)) return c.json({ error: "Invalid origin" }, 403);
   try {
-    await authenticateRequest(c.req.raw.headers);
-    const challenge = await consume(c, passkeyCookie, "register");
+    const user = await authenticateRequest(c.req.raw.headers);
+    const role = accountRole(user.unionId);
+    const challenge = await consume(c, passkeyCookie, "register", accountEmail(role));
     const response = await c.req.json() as RegistrationResponseJSON;
     const result = await verifyRegistrationResponse({
       response, expectedChallenge: challenge, expectedOrigin: env.appOrigin,
@@ -127,6 +133,7 @@ export async function passkeyRegisterVerify(c: Context) {
     const { credential } = result.registrationInfo;
     await getDb().insert(passkeyCredentials).values({
       id: credential.id,
+      account: role,
       publicKey: Buffer.from(credential.publicKey).toString("base64url"),
       counter: credential.counter,
       transports: JSON.stringify(credential.transports ?? []),
@@ -154,7 +161,7 @@ export async function passkeyLoginVerify(c: Context) {
     const response = await c.req.json() as AuthenticationResponseJSON;
     if (typeof response.id !== "string" || response.id.length > 255) throw new Error("Invalid credential");
     const [row] = await getDb().select().from(passkeyCredentials).where(eq(passkeyCredentials.id, response.id)).limit(1);
-    if (!row) throw new Error("Unknown credential");
+    if (!row || (row.account !== "owner" && row.account !== "reviewer") || (row.account === "reviewer" && !env.reviewEmail)) throw new Error("Unknown credential");
     const result = await verifyAuthenticationResponse({
       response, expectedChallenge: challenge, expectedOrigin: env.appOrigin,
       expectedRPID: rpID, requireUserVerification: true,
@@ -164,17 +171,17 @@ export async function passkeyLoginVerify(c: Context) {
     await getDb().update(passkeyCredentials)
       .set({ counter: result.authenticationInfo.newCounter, lastUsedAt: new Date() })
       .where(eq(passkeyCredentials.id, row.id));
-    return issueSession(c);
+    return issueSession(c, accountEmail(row.account));
   } catch { return c.json({ error: "Passkey sign-in failed" }, 401); }
 }
 
 export async function passkeyRemove(c: Context) {
   if (!trustedOrigin(c)) return c.json({ error: "Invalid origin" }, 403);
   try {
-    await authenticateRequest(c.req.raw.headers);
+    const user = await authenticateRequest(c.req.raw.headers);
     const body = await c.req.json() as { id?: unknown };
     if (typeof body.id !== "string" || body.id.length > 255) return c.json({ error: "Invalid passkey" }, 400);
-    await getDb().delete(passkeyCredentials).where(eq(passkeyCredentials.id, body.id));
+    await getDb().delete(passkeyCredentials).where(and(eq(passkeyCredentials.id, body.id), eq(passkeyCredentials.account, accountRole(user.unionId))));
     return c.json({ success: true });
   } catch { return c.json({ error: "Sign in required" }, 401); }
 }

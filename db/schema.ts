@@ -45,6 +45,7 @@ export type InsertUser = typeof users.$inferInsert;
 
 export const passkeyCredentials = mysqlTable("passkey_credentials", {
   id: varchar("id", { length: 255 }).primaryKey(),
+  account: varchar("account", { length: 16 }).default("owner").notNull(),
   publicKey: text("public_key").notNull(),
   counter: bigint("counter", { mode: "number", unsigned: true }).default(0).notNull(),
   transports: text("transports").notNull(),
