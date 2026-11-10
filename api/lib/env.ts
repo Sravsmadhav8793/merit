@@ -9,11 +9,15 @@ function required(name: string): string {
 }
 
 export const env = {
-  appId: required("APP_ID"),
   appSecret: required("APP_SECRET"),
+  adminEmail: required("ADMIN_EMAIL"),
+  adminPasswordScrypt: required("ADMIN_PASSWORD_SCRYPT"),
   isProduction: process.env.NODE_ENV === "production",
   databaseUrl: required("DATABASE_URL"),
-  kimiAuthUrl: required("KIMI_AUTH_URL"),
-  kimiOpenUrl: required("KIMI_OPEN_URL"),
-  ownerUnionId: process.env.OWNER_UNION_ID ?? "",
+  databaseCaFile: process.env.DATABASE_CA_FILE ?? "",
 };
+
+if (env.isProduction) {
+  if (env.appSecret.length < 32) throw new Error("APP_SECRET must be at least 32 characters");
+  if (!/^[a-f0-9]{32}:[a-f0-9]{128}$/i.test(env.adminPasswordScrypt)) throw new Error("ADMIN_PASSWORD_SCRYPT must be salt:hash");
+}

@@ -19,26 +19,12 @@ const rangeConfig:Record<ChartRange,{range:string;period:string;interval:string}
 let cache:QuoteState|undefined;let pending:Promise<QuoteState>|undefined;
 const historyCache=new Map<string,{bars:MarketBar[];currency:string;updatedAt:number}>();
 
-async function professionalChart(symbol:string,selected:ChartRange='1M'){
- const base=process.env.KIMI_AGENTGW_BASE_URL;const key=process.env.KIMI_AGENTGW_API_KEY;
- if(!base||!key)throw new Error('Professional market connection unavailable');
- const gateway=base.replace(/\/$/,'').replace(/\/v1(?:\/tools)?$/,'');const config=rangeConfig[selected];
- const response=await fetch(`${gateway}/v1/tools`,{method:'POST',headers:{Authorization:`Bearer ${key}`,'Content-Type':'application/json',Accept:'application/json','X-Kimi-Plugin':'yahoo_finance'},body:JSON.stringify({method:'call_data_source_tool',params:{data_source_name:'yahoo_finance',api_name:'get_historical_stock_prices',params:{ticker:symbol,period:config.period,interval:config.interval,file_path:`/tmp/merit-${symbol.replace(/[^a-z0-9]/gi,'')}-${selected}.csv`}}}),signal:AbortSignal.timeout(45_000)});
- if(!response.ok)throw new Error(`Professional provider returned ${response.status}`);
- const raw=await response.json() as any;if(!raw.is_success)throw new Error('Professional quote request failed');
- const csv=raw.files?.[0]?.content as string;if(!csv)throw new Error('Professional quote file missing');
- const rows=csv.trim().split(/\r?\n/).slice(1).map(line=>line.split(','));
- const valid=rows.filter(r=>r[4]!==''&&Number.isFinite(Number(r[4]))&&Number(r[4])>0);if(!valid.length)throw new Error('Professional quote history empty');
- const latest=valid.at(-1)!;const previous=valid.length>1?valid.at(-2)!:latest;
- return {timestamp:valid.map(r=>Math.floor(new Date(r[0]).getTime()/1000)),meta:{regularMarketPrice:Number(latest[4]),chartPreviousClose:Number(previous[4]),currency:undefined},indicators:{quote:[{open:valid.map(r=>Number(r[1])),high:valid.map(r=>Number(r[2])),low:valid.map(r=>Number(r[3])),close:valid.map(r=>Number(r[4])),volume:valid.map(r=>Number(r[6])||0)}]}};
-}
 async function chart(symbol:string,selected:ChartRange='1M'){
- try{const config=rangeConfig[selected];const url=`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=${config.range}&interval=${config.interval}&includePrePost=false`;
+ const config=rangeConfig[selected];const url=`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=${config.range}&interval=${config.interval}&includePrePost=false`;
  const response=await fetch(url,{headers:{'User-Agent':'Mozilla/5.0 MERIT-Research/1.0'},signal:AbortSignal.timeout(7000)});
  if(!response.ok)throw new Error(`Provider returned ${response.status}`);
  const json=await response.json() as any;const result=json.chart?.result?.[0];
  if(!result?.meta?.regularMarketPrice)throw new Error('No current quote returned');return result;
- }catch(error){return professionalChart(symbol,selected)}
 }
 function toBars(r:any):MarketBar[]{
  const q=r.indicators?.quote?.[0]??{};const times=r.timestamp??[];

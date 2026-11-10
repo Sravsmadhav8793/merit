@@ -1,4 +1,4 @@
-// Structured logger for the backend, mirrored to /tmp/kimi-logs/app.log.
+// Structured logger for the backend, mirrored to an app log file.
 //
 // Why a file at all: the sandbox-local log is what the building agent reads to
 // debug a preview that will not start or a request that 500s. stdout is
@@ -27,8 +27,8 @@ import { scrubCtx, scrubValue } from "./scrub";
 // turning a logging feature into a new outage class. Hence an explicit byte
 // budget below: past it the file is truncated once, with a marker, so the newest
 // evidence survives and the total stays bounded.
-const LOG_DIR = process.env.KIMI_LOG_DIR ?? "/tmp/kimi-logs";
-const LOG_FILE = process.env.KIMI_LOG_FILE ?? path.join(LOG_DIR, "app.log");
+const LOG_DIR = process.env.APP_LOG_DIR ?? "/tmp/app-logs";
+const LOG_FILE = process.env.APP_LOG_FILE ?? path.join(LOG_DIR, "app.log");
 // 8 MiB is far more than a debugging session reads and small enough that even a
 // hostile write rate cannot exhaust a sandbox disk.
 const LOG_MAX_BYTES = 8 * 1024 * 1024;

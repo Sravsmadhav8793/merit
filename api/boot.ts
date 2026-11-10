@@ -5,9 +5,8 @@ import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { appRouter } from "./router";
 import { createContext } from "./context";
 import { env } from "./lib/env";
-import { createOAuthCallbackHandler, authenticateRequest } from "./kimi/auth";
+import { login, authenticateRequest } from "./local-auth";
 import { createOauthState, authorizationUrl, exchangeOauthCode } from "./upstox";
-import { Paths } from "@contracts/constants";
 import { log } from "./lib/logger";
 import { handleClientLog } from "./lib/clientlog";
 import { REQUEST_ID_HEADER, runWithRequestId } from "./lib/requestcontext";
@@ -79,7 +78,7 @@ app.get('/api/upstox/callback', async (c) => {
     return c.redirect('/?brokerage=error');
   }
 });
-app.get(Paths.oauthCallback, createOAuthCallbackHandler());
+app.post("/api/login", bodyLimit({ maxSize: 4096 }), login);
 app.use("/api/trpc/*", async (c) => {
   return fetchRequestHandler({
     endpoint: "/api/trpc",
@@ -99,7 +98,7 @@ app.post(
 );
 app.all("/api/*", (c) => c.json({ error: "Not Found" }, 404));
 
-// Unhandled request errors must reach /tmp/kimi-logs/app.log, not just stdout:
+// Unhandled request errors must reach the app log, not just stdout:
 // that file is what the building agent reads when a preview 500s, and without
 // this the log looks clean while the request actually failed. Response stays a
 // generic 500 (no stack leaked to the caller); the detail goes to the log only.

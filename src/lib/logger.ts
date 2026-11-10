@@ -1,7 +1,7 @@
 // Frontend logger. Its one job is to make browser-side errors readable by the
 // building agent, which only sees the sandbox — a plain console.error never
 // reaches it. Everything logged here is POSTed to /api/log, which the backend
-// (grafted on this project) appends to /tmp/kimi-logs/app.log, the same file
+// (grafted on this project) appends to the app log, the same file
 // the server writes. One file, both halves.
 //
 // Same-origin by construction: the preview URL is a reverse proxy to this

@@ -1,0 +1,44 @@
+name: private-apps
+services:
+  quantum:
+    build: ../../quantum-accounting-mvp
+    env_file: /etc/private-apps/quantum.env
+    volumes:
+      - /etc/private-apps/ca.crt:/etc/private-apps/ca.crt:ro
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3111:3000"
+    mem_limit: 700m
+  merit:
+    build: ..
+    env_file: /etc/private-apps/merit.env
+    volumes:
+      - /etc/private-apps/ca.crt:/etc/private-apps/ca.crt:ro
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3112:3000"
+    mem_limit: 700m
+  roktara:
+    build: ../../roktara
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3113:80"
+    mem_limit: 128m
+  quantum_migrate:
+    profiles: [migrate]
+    build:
+      context: ../../quantum-accounting-mvp
+      target: build
+    env_file: /etc/private-apps/quantum.env
+    volumes:
+      - /etc/private-apps/ca.crt:/etc/private-apps/ca.crt:ro
+    command: npm run db:push
+  merit_migrate:
+    profiles: [migrate]
+    build:
+      context: ..
+      target: build
+    env_file: /etc/private-apps/merit.env
+    volumes:
+      - /etc/private-apps/ca.crt:/etc/private-apps/ca.crt:ro
+    command: npm run db:push

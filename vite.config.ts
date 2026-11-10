@@ -3,21 +3,12 @@ import path from "path"
 const __dirname = import.meta.dirname
 import react from "@vitejs/plugin-react"
 import { defineConfig } from "vite"
-import { inspectAttr } from 'kimi-plugin-inspect-react'
 
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
-    {
-      name: "kimi-preview-host",
-      config(config) {
-        const hosts = config.server?.allowedHosts;
-        if (hosts === true || hosts?.includes("3000.proxy.internal")) return;
-        return { server: { allowedHosts: ["3000.proxy.internal"] } };
-      },
-    },
     devServer({ entry: "api/boot.ts", exclude: [/^\/(?!api\/).*$/] }),
-    inspectAttr(), react()],
+    react()],
   server: {
     port: 3000,
   },

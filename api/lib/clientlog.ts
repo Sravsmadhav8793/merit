@@ -3,7 +3,7 @@
 // The frontend has no filesystem access to the sandbox, so a browser-side
 // console.log is invisible to the building agent (it only reads the sandbox).
 // This endpoint closes that gap: the injected frontend logger POSTs here, and
-// we append the lines to the same /tmp/kimi-logs/app.log the backend writes —
+// we append the lines to the same app log the backend writes —
 // one file, one format, one read for the agent.
 //
 // Guardrails (the preview URL is public — anyone holding it can reach this
