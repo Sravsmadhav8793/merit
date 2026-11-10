@@ -7,7 +7,8 @@
       "namespace": "android_app",
       "package_name": "com.sravantix.merit",
       "sha256_cert_fingerprints": [
-        "4A:0A:A8:B1:A2:EC:53:C8:5E:FF:4C:59:62:C9:E4:76:30:1E:0D:30:19:F2:D9:D1:42:BF:57:BC:03:6B:29:A4"
+        "4A:0A:A8:B1:A2:EC:53:C8:5E:FF:4C:59:62:C9:E4:76:30:1E:0D:30:19:F2:D9:D1:42:BF:57:BC:03:6B:29:A4",
+        "DD:89:0D:DB:65:D2:0C:D4:E9:41:4D:2A:35:F0:DC:D1:8F:E3:58:38:06:0D:E6:D4:1A:78:22:4F:B0:15:2A:AA"
       ]
     }
   }
