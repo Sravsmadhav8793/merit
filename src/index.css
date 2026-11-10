@@ -1,0 +1,2 @@
+@tailwind base;@tailwind components;@tailwind utilities;
+@layer base{*{border-color:oklch(0.27 0.018 250)}}html{background:#0a0e14;color-scheme:dark;scroll-behavior:smooth}body{min-width:320px;min-height:100dvh}::selection{background:#164e63;color:#ecfeff}::-webkit-scrollbar{width:7px;height:7px}::-webkit-scrollbar-track{background:#0c1219}::-webkit-scrollbar-thumb{background:#34424d;border-radius:5px}

@@ -1,0 +1,8 @@
+import { useState } from 'react';
+import { money, type Stock } from '@contracts/market';
+
+export default function MarketMap({stocks,onOpen}:{stocks:Stock[];onOpen:(s:Stock)=>void}){
+ const [metric,setMetric]=useState<'change'|'score'|'upside'>('change');
+ const advancing=stocks.filter(s=>s.change>0).length;
+ return <div className="market-map-wrap"><div className="map-toolbar"><div><strong>Market heatmap</strong><span>{advancing} advancing · {stocks.length-advancing} declining</span></div><div className="segmented">{[['change','Day move'],['score','MERIT'],['upside','Fair-value gap']].map(([v,l])=><button key={v} className={metric===v?'active':''} onClick={()=>setMetric(v as typeof metric)}>{l}</button>)}</div></div><div className="market-map">{stocks.map(s=>{const val=metric==='change'?s.change:metric==='score'?(s.score-70)/3:(s.fairValue/s.price-1)*100;const intensity=Math.min(.86,.2+Math.abs(val)*.09);const positive=val>=0;return <button key={s.symbol} onClick={()=>onOpen(s)} className="heat-cell" style={{background:positive?`rgba(0,187,127,${intensity})`:`rgba(251,92,104,${intensity})`}}><span>{s.sector} · {s.exchange}</span><strong>{s.symbol}</strong><b>{metric==='change'?`${s.change>=0?'+':''}${s.change.toFixed(2)}%`:metric==='score'?s.score:`${val>=0?'+':''}${val.toFixed(1)}%`}</b><small>{money(s.price,s.currency)}</small></button>})}</div><div className="map-legend"><span>{metric==='change'?'Daily performance':metric==='score'?'Research score':'Implied upside / downside'}</span><span>Lower <i className="loss"/> neutral <i className="gain"/> Higher</span></div></div>
+}
