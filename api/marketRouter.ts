@@ -1,15 +1,15 @@
 import { z } from 'zod';
 import { asc, desc, eq } from 'drizzle-orm';
-import { createRouter, publicQuery } from './middleware';
+import { createRouter, authedQuery } from './middleware';
 import { getDb } from './queries/connection';
 import { watchlist, holdings, transactions, researchNotes, priceAlerts } from '@db/schema';
 import { getStock, type ChartRange } from '../contracts/market';
 import { getLiveStocks, getMarketHistory } from './quotes';
 
 export const marketRouter = createRouter({
-  quotes: publicQuery.input(z.object({force:z.boolean().optional()}).optional()).query(async ({input})=>getLiveStocks(input?.force)),
-  history: publicQuery.input(z.object({symbol:z.string().min(1).max(16),range:z.enum(['1D','5D','1M','6M','1Y','5Y'])})).query(({input})=>getMarketHistory(input.symbol,input.range as ChartRange)),
-  workspace: publicQuery.query(async () => {
+  quotes: authedQuery.input(z.object({force:z.boolean().optional()}).optional()).query(async ({input})=>getLiveStocks(input?.force)),
+  history: authedQuery.input(z.object({symbol:z.string().min(1).max(16),range:z.enum(['1D','5D','1M','6M','1Y','5Y'])})).query(({input})=>getMarketHistory(input.symbol,input.range as ChartRange)),
+  workspace: authedQuery.query(async () => {
     const db=getDb();
     const alerts=await db.select().from(priceAlerts).orderBy(desc(priceAlerts.createdAt));
     if(alerts.some(a=>a.active&&!a.triggeredAt)){
@@ -31,12 +31,12 @@ export const marketRouter = createRouter({
     return { watchlist:await db.select().from(watchlist).orderBy(desc(watchlist.createdAt)), holdings:positions,
       transactions:await db.select().from(transactions).orderBy(desc(transactions.createdAt)).limit(20), notes:await db.select().from(researchNotes), alerts:await db.select().from(priceAlerts).orderBy(desc(priceAlerts.createdAt)) };
   }),
-  toggleWatch: publicQuery.input(z.object({symbol:z.string().min(1).max(12)})).mutation(async ({input})=>{
+  toggleWatch: authedQuery.input(z.object({symbol:z.string().min(1).max(12)})).mutation(async ({input})=>{
     const db=getDb(); const existing=await db.select().from(watchlist).where(eq(watchlist.symbol,input.symbol)).limit(1);
     if(existing.length) await db.delete(watchlist).where(eq(watchlist.symbol,input.symbol)); else await db.insert(watchlist).values({symbol:input.symbol});
     return {watching:!existing.length};
   }),
-  trade: publicQuery.input(z.object({symbol:z.string().min(1).max(12),side:z.enum(['BUY','SELL']),shares:z.number().positive().max(100000)})).mutation(async ({input})=>{
+  trade: authedQuery.input(z.object({symbol:z.string().min(1).max(12),side:z.enum(['BUY','SELL']),shares:z.number().positive().max(100000)})).mutation(async ({input})=>{
     const db=getDb(); const live=await getLiveStocks(); const stock=live.stocks.find(s=>s.symbol===input.symbol)??getStock(input.symbol); const existing=await db.select().from(holdings).where(eq(holdings.symbol,input.symbol)).limit(1); const current=existing[0];
     const oldShares=Number(current?.shares??0); if(input.side==='SELL'&&input.shares>oldShares) throw new Error('Sale exceeds your current position.');
     const nextShares=input.side==='BUY'?oldShares+input.shares:oldShares-input.shares;
@@ -47,13 +47,13 @@ export const marketRouter = createRouter({
     else await db.insert(holdings).values({symbol:input.symbol,shares:String(nextShares),averageCost:String(nextCost)});
     return {ok:true,shares:nextShares};
   }),
-  createAlert: publicQuery.input(z.object({symbol:z.string().min(1).max(12),direction:z.enum(['ABOVE','BELOW']),target:z.number().positive().max(100000000)})).mutation(async ({input})=>{
+  createAlert: authedQuery.input(z.object({symbol:z.string().min(1).max(12),direction:z.enum(['ABOVE','BELOW']),target:z.number().positive().max(100000000)})).mutation(async ({input})=>{
     await getDb().insert(priceAlerts).values({...input,target:String(input.target)});return {ok:true};
   }),
-  deleteAlert: publicQuery.input(z.object({id:z.number().int().positive()})).mutation(async ({input})=>{
+  deleteAlert: authedQuery.input(z.object({id:z.number().int().positive()})).mutation(async ({input})=>{
     await getDb().delete(priceAlerts).where(eq(priceAlerts.id,input.id));return {ok:true};
   }),
-  saveNote: publicQuery.input(z.object({symbol:z.string().min(1).max(12),note:z.string().max(1200)})).mutation(async ({input})=>{
+  saveNote: authedQuery.input(z.object({symbol:z.string().min(1).max(12),note:z.string().max(1200)})).mutation(async ({input})=>{
     await getDb().insert(researchNotes).values(input).onDuplicateKeyUpdate({set:{note:input.note,updatedAt:new Date()}}); return {ok:true};
   }),
 });
