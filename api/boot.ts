@@ -5,7 +5,7 @@ import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { appRouter } from "./router";
 import { createContext } from "./context";
 import { env } from "./lib/env";
-import { login, authenticateRequest } from "./local-auth";
+import { login, authenticateRequest, isReviewer } from "./local-auth";
 import { signInOptions, googleLogin, passkeyList, passkeyRegisterOptions, passkeyRegisterVerify, passkeyLoginOptions, passkeyLoginVerify, passkeyRemove } from "./modern-auth";
 import { createOauthState, authorizationUrl, exchangeOauthCode } from "./upstox";
 import { log } from "./lib/logger";
@@ -63,6 +63,7 @@ app.use("/api/trpc/*", bodyLimit({ maxSize: 50 * 1024 * 1024 }));
 app.get('/api/upstox/start', async (c) => {
   const user = await authenticateRequest(c.req.raw.headers).catch(() => null);
   if (!user) return c.redirect('/login');
+  if (isReviewer(user.unionId)) return c.text('Brokerage connections are disabled in the review workspace.', 403);
   if (!process.env.UPSTOX_CLIENT_ID || !process.env.UPSTOX_REDIRECT_URI) return c.text('Upstox OAuth is not configured.', 503);
   return c.redirect(authorizationUrl(await createOauthState(user)));
 });
@@ -70,6 +71,7 @@ app.get('/api/upstox/callback', async (c) => {
   try {
     const user = await authenticateRequest(c.req.raw.headers).catch(() => null);
     if (!user) return c.redirect('/login');
+    if (isReviewer(user.unionId)) return c.redirect('/?brokerage=error');
     const code = c.req.query('code'); const state = c.req.query('state');
     if (!code || !state) return c.redirect('/?brokerage=error');
     await exchangeOauthCode(code, state, user);
