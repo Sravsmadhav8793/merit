@@ -1,0 +1,30 @@
+{
+  "packageId": "com.sravantix.merit",
+  "host": "merit.sravantix.com",
+  "name": "M.E.R.I.T.",
+  "launcherName": "MERIT",
+  "display": "standalone",
+  "themeColor": "#0a0e14",
+  "navigationColor": "#0a0e14",
+  "backgroundColor": "#0a0e14",
+  "enableNotifications": false,
+  "startUrl": "/",
+  "iconUrl": "https://merit.sravantix.com/icon-512.png",
+  "maskableIconUrl": "https://merit.sravantix.com/icon-512.png",
+  "splashScreenFadeOutDuration": 300,
+  "signingKey": {
+    "path": "../../release-secrets/android-upload.jks",
+    "alias": "upload"
+  },
+  "appVersionCode": 1,
+  "appVersion": "1.0.0",
+  "shortcuts": [],
+  "generatorApp": "Sravantix release tooling / Bubblewrap 1.27.0",
+  "webManifestUrl": "https://merit.sravantix.com/manifest.webmanifest",
+  "fallbackType": "customtabs",
+  "enableSiteSettingsShortcut": true,
+  "minSdkVersion": 24,
+  "orientation": "default",
+  "fingerprints": [],
+  "additionalTrustedOrigins": []
+}
