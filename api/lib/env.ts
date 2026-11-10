@@ -15,9 +15,12 @@ export const env = {
   isProduction: process.env.NODE_ENV === "production",
   databaseUrl: required("DATABASE_URL"),
   databaseCaFile: process.env.DATABASE_CA_FILE ?? "",
+  appOrigin: process.env.APP_ORIGIN ?? "http://localhost:5173",
+  googleClientId: process.env.GOOGLE_CLIENT_ID ?? "",
 };
 
 if (env.isProduction) {
   if (env.appSecret.length < 32) throw new Error("APP_SECRET must be at least 32 characters");
   if (!/^[a-f0-9]{32}:[a-f0-9]{128}$/i.test(env.adminPasswordScrypt)) throw new Error("ADMIN_PASSWORD_SCRYPT must be salt:hash");
+  if (!/^https:\/\/[a-z0-9.-]+$/.test(env.appOrigin)) throw new Error("APP_ORIGIN must be an HTTPS origin");
 }

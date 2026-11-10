@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { ModernSignIn } from "@/components/ModernSignIn";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -26,6 +27,6 @@ export default function Login() {
         <label className="block">Password<input className="w-full rounded border p-2" type="password" autoComplete="current-password" required value={password} onChange={e => setPassword(e.target.value)} /></label>
         {error && <p role="alert" className="text-red-600">{error}</p>}
         <Button className="w-full" size="lg" type="submit" disabled={busy}>{busy ? "Signing in…" : "Sign in"}</Button>
-      </form></CardContent></Card>
+      </form><ModernSignIn /></CardContent></Card>
   </div>;
 }

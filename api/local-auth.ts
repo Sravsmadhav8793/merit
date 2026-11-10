@@ -9,7 +9,7 @@ import { env } from "./lib/env";
 import { getSessionCookieOptions } from "./lib/cookies";
 import { findUserByUnionId, upsertUser } from "./queries/users";
 
-const identity = () => `local:${env.adminEmail.toLowerCase()}`;
+export const identity = () => `local:${env.adminEmail.toLowerCase()}`;
 const secret = () => new TextEncoder().encode(env.appSecret);
 
 export async function authenticateRequest(headers: Headers) {
@@ -27,6 +27,13 @@ export async function authenticateRequest(headers: Headers) {
 }
 
 const attempts = new Map<string, { count: number; until: number }>();
+export async function issueSession(c: Context) {
+  await upsertUser({ unionId: identity(), email: env.adminEmail, name: env.adminEmail, role: "admin", lastSignInAt: new Date() });
+  const token = await new SignJWT({}).setProtectedHeader({ alg: "HS256" }).setSubject(identity()).setIssuedAt().setExpirationTime("12h").sign(secret());
+  setCookie(c, Session.cookieName, token, { ...getSessionCookieOptions(c.req.raw.headers), maxAge: Session.maxAgeMs / 1000 });
+  return c.json({ success: true });
+}
+
 export async function login(c: Context) {
   const origin = c.req.header("origin");
   const host = c.req.header("host");
@@ -50,8 +57,5 @@ export async function login(c: Context) {
     return c.json({ error: "Invalid email or password" }, 401);
   }
   attempts.delete(address);
-  await upsertUser({ unionId: identity(), email: env.adminEmail, name: env.adminEmail, role: "admin", lastSignInAt: new Date() });
-  const token = await new SignJWT({}).setProtectedHeader({ alg: "HS256" }).setSubject(identity()).setIssuedAt().setExpirationTime("12h").sign(secret());
-  setCookie(c, Session.cookieName, token, { ...getSessionCookieOptions(c.req.raw.headers), maxAge: Session.maxAgeMs / 1000 });
-  return c.json({ success: true });
+  return issueSession(c);
 }

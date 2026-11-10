@@ -1,5 +1,6 @@
 import {
   mysqlTable,
+  bigint,
   serial,
   varchar,
   decimal,
@@ -41,6 +42,15 @@ export const users = mysqlTable("users", {
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
+
+export const passkeyCredentials = mysqlTable("passkey_credentials", {
+  id: varchar("id", { length: 255 }).primaryKey(),
+  publicKey: text("public_key").notNull(),
+  counter: bigint("counter", { mode: "number", unsigned: true }).default(0).notNull(),
+  transports: text("transports").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  lastUsedAt: timestamp("last_used_at"),
+});
 
 export const brokerageConnections = mysqlTable('brokerage_connections', {
   id: serial('id').primaryKey(),

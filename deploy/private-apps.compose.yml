@@ -20,10 +20,13 @@ services:
     mem_limit: 700m
   roktara:
     build: ../../roktara
+    env_file: /etc/private-apps/roktara.env
+    volumes:
+      - /opt/private-apps-data/roktara:/data
     restart: unless-stopped
     ports:
-      - "127.0.0.1:3113:80"
-    mem_limit: 128m
+      - "127.0.0.1:3113:3000"
+    mem_limit: 400m
   quantum_migrate:
     profiles: [migrate]
     build:

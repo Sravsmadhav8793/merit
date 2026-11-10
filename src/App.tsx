@@ -11,6 +11,7 @@ import BrokerageView from '@/components/BrokerageView';
 import { Navigate, Route, Routes } from 'react-router';
 import Login from '@/pages/Login';
 import { useAuth } from '@/hooks/useAuth';
+import PasskeySettings from '@/pages/PasskeySettings';
 import './App.css';
 
 type View = 'Overview'|'Explore'|'Watchlist'|'Alerts'|'Portfolio'|'Research'|'Brokerage';
@@ -46,7 +47,7 @@ function MeritApp(){
   <main className="main"><header className="topbar"><button className="icon-btn lg:hidden" onClick={()=>setMobileNav(true)} aria-label="Open navigation"><Menu size={21}/></button><button className="search-trigger" onClick={()=>setSearch(true)}><Search size={17}/><span>Search companies or tickers</span><kbd>⌘ K</kbd></button><div className="top-actions"><button className="market-state live-market" onClick={()=>quotes.refetch()} disabled={quotes.isFetching} title="Refresh live market data"><i/> {quotes.isFetching?'SYNCING':quotes.data?.liveCount?`LIVE · ${quotes.data.liveCount}/${STOCKS.length}`:'CACHED DATA'}<RefreshCw size={12} className={quotes.isFetching?'spin':''}/></button><button className="icon-btn" onClick={()=>navigate('Alerts')} aria-label="Open price alerts"><Bell size={18}/>{ws?.alerts.some(a=>a.triggeredAt)&&<b/>}</button><button className="icon-btn" onClick={()=>setPrivacy(!privacy)} aria-label="Toggle private values">{privacy?<Eye size={18}/>:<EyeOff size={18}/>}</button></div></header>
   <div className="ticker-tape">{[STOCKS[10],STOCKS[11],STOCKS[0],STOCKS[18],STOCKS[21],STOCKS[22]].map(s=><button key={s.symbol} onClick={()=>openStock(s)}><strong>{s.symbol}</strong><span>{money(s.price,s.currency)}</span><Change value={s.change}/></button>)}</div>
   <div className="market-switch" aria-label="Market region">{MARKETS.map(m=><button key={m} className={market===m?'active':''} onClick={()=>setMarket(m)}>{m==='US'?'United States':m}<span>{m==='All markets'?STOCKS.length:STOCKS.filter(s=>s.market===m).length}</span></button>)}</div>
-  {settings&&<div className="settings-pop"><strong>Display preferences</strong><button onClick={()=>{setPrivacy(!privacy);setSettings(false)}}>{privacy?'Show':'Hide'} portfolio values</button><button onClick={()=>{toast.success('Preferences saved');setSettings(false)}}>Save preferences</button></div>}
+  {settings&&<div className="settings-pop"><strong>Display preferences</strong><button onClick={()=>{setPrivacy(!privacy);setSettings(false)}}>{privacy?'Show':'Hide'} portfolio values</button><button onClick={()=>{toast.success('Preferences saved');setSettings(false)}}>Save preferences</button><a href="/security">Device sign-in</a></div>}
   <div className="quote-status">{quotes.data?<><span className={quotes.data.errors.length?'stale':''}>{quotes.data.errors.length?`${quotes.data.liveCount} live · ${quotes.data.errors.length} cached`:'All markets synchronized'}</span><span>Last update {new Date(quotes.data.updatedAt).toLocaleTimeString()}</span></>:<span>Connecting to live markets…</span>}</div>
   <div className="content">
    {isLoading?<Loading/>:error?<ErrorState retry={()=>invalidate()}/>:<>
@@ -106,4 +107,11 @@ function PrivateApp(){
  return <MeritApp/>;
 }
 
-export default function App(){return <Routes><Route path="/login" element={<Login/>}/><Route path="*" element={<PrivateApp/>}/></Routes>}
+export default function App(){return <Routes><Route path="/login" element={<Login/>}/><Route path="/security" element={<PrivateSecurity/>}/><Route path="*" element={<PrivateApp/>}/></Routes>}
+
+function PrivateSecurity(){
+ const {user,isLoading}=useAuth();
+ if(isLoading)return <div role="status">Checking your session…</div>;
+ if(!user)return <Navigate to="/login" replace/>;
+ return <PasskeySettings/>;
+}
